@@ -148,7 +148,11 @@ OpenAI-compatible endpoint. It is the legible one — the whole translation from
 CEP events is readable in a single file, `cep/adapters/hermes.py`.
 
 ```bash
+# From a clone, for reading and running the tests:
 pip install -e ".[hermes]"
+
+# Or pinned to the archival release:
+pip install "cep[hermes] @ git+https://github.com/matshoppenbrouwers/cep-protocol@v0.1.0"
 ```
 
 ```python
@@ -222,8 +226,8 @@ its own module, stripped internal planning comments, and packaging metadata. The
 on the original codebase.
 
 **This repository is not maintained.** It is a frozen artifact, published as a reference and a
-record of a design. Issues and pull requests will not be reviewed, no releases are planned, and
-no support is offered. Fork it freely — that is what the licence is for. For live work at this
+record of a design. `v0.1.0` is the archival release of the extracted code; no further releases
+are planned. Issues and pull requests will not be reviewed, and no support is offered. Fork it freely — that is what the licence is for. For live work at this
 layer, go to [ACP](https://github.com/zed-industries/agent-client-protocol).
 
 ## Further reading
