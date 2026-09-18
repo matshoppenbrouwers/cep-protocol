@@ -44,7 +44,7 @@ not a specification under active development. See
 - `harness_id: str` — which adapter produced this event
 - `conversation_id: str` — session/conversation scope
 - `payload: Payload` — type-specific payload (union of 14 frozen dataclasses)
-- `id: str` — UUID, auto-generated
+- `id: str` — `evt-` followed by 12 hex characters of a UUID4, auto-generated
 - `timestamp: int` — Unix epoch milliseconds, auto-generated
 - `seq: int` — process-wide monotonic sequence. Millisecond timestamps collide under
   streaming, so ordered replay sorts by `(timestamp, seq)`; `seq` is the tie-breaker
@@ -118,7 +118,8 @@ than silently dropped.
 - `list_adapters()` — `dict` of id → name
 - `get(adapter_id)` — retrieve a specific adapter
 
-Exactly one adapter is active at a time.
+At most one adapter is active at a time. The registry starts with none active, and
+unregistering the active adapter clears the selection.
 
 ---
 
@@ -152,30 +153,39 @@ The adapter keeps a hard connect-time gate: risky tools must be explicitly opted
 `connect()` refuses with `RiskyToolsGateError`, a `ConfigurationError` subclass defined
 in `cep/adapters/hermes.py`.
 
-Profile mapping, as verified: Hermes applies a per-request `model` and a profile-scoped
-`X-Hermes-Session-Id`, giving one isolated session per agent profile.
+Profile mapping, as verified against the Hermes build tested on 17 July 2026: the adapter
+sends a per-request `model` and a profile-scoped `X-Hermes-Session-Id`, giving one isolated
+session per agent profile. Current Hermes may require configuration to accept a bare model
+override, and documents custom `hermes.tool.progress` events this adapter does not read, so
+treat this as a record of one tested revision rather than a live compatibility claim.
 
 ### The OpenClaw adapter (not shipped here)
 
-Recorded for completeness. OpenClaw Gateway is **WebSocket-only** at
-`ws://localhost:18789`, with no REST API. Verified against gateway 2026.7.1:
+Recorded for completeness. This section describes **what the CEP adapter used**, not the
+full capability surface of OpenClaw Gateway. The adapter spoke only the WebSocket protocol
+at `ws://localhost:18789`. OpenClaw also exposes an HTTP REST API — including `/health`,
+`/healthz` and OpenAI-compatible routes — which the adapter did not use. Everything below
+is the WebSocket path as the adapter exercised it against gateway 2026.7.1, and the
+limitations listed are the adapter's, not necessarily the gateway's:
 
 - custom JSON framing, `{type: "req" | "res" | "event"}`
 - a **client-initiated `connect` request** carrying scopes
   `["operator.read", "operator.write"]` (protocol version 4). Without scopes, every
-  method returns a missing-scope error. Auth is in-band via the `connect` params
-  (`auth.token`), not an HTTP header.
+  method returns a missing-scope error. Approval resolution needs a further
+  `operator.approvals` scope. Auth is in-band via the `connect` params (`auth.token`),
+  not an HTTP header; the server also opens with a `connect.challenge` frame.
 - the server issues a `sessionKey`; messages go out via `chat.send`, streaming arrives
   as pushed `chat` events, terminal on `state: "final"`
 - `sessions.abort` cancels; `exec.approval.request` / `exec.approval.resolve` carry
   approvals
-- health is the WS `status` method (requires `operator.read`); no HTTP health path
-  exists
+- the adapter took health from the WS `status` method (requires `operator.read`); it did
+  not use the gateway's HTTP `/health` and `/healthz` routes
 - launch it in the foreground (`openclaw gateway run --port <port>`), never with
   `--install-daemon`, which registers OpenClaw's own OS service
-- profile mapping: OpenClaw isolates sessions per profile and nothing else. Its gateway
-  accepts no per-agent working directory, model, system prompt, or permissions, so
-  those four profile fields report unsupported.
+- profile mapping: through the WebSocket methods the adapter used, it could isolate
+  sessions per profile and nothing else, so working directory, model, system prompt and
+  permissions were reported unsupported. That was a limit of the adapter's chosen
+  surface — the gateway does support session model overrides by other routes.
 
 ---
 

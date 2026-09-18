@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from cep.types import (
     ApprovalRequestPayload,
     ApprovalResponsePayload,
@@ -274,3 +275,38 @@ def test_seq_round_trip_and_legacy_default():
     legacy = event.to_dict()
     del legacy["seq"]
     assert ShellEvent.from_dict(legacy).seq == 0
+
+
+def test_unknown_event_type_raises_rather_than_falling_back():
+    """CEP has no forward compatibility, and from_dict says so honestly.
+
+    The docstring previously promised a raw-dict fallback for unknown event
+    types, but EventType(...) rejects them first. The README claimed on that
+    basis that an older shell survives a newer harness; it does not.
+    """
+    data = {
+        "id": "evt-abc123def456",
+        "type": "event_from_a_future_version",
+        "harness_id": "h",
+        "conversation_id": "c",
+        "timestamp": 1,
+        "seq": 1,
+        "payload": {},
+    }
+    with pytest.raises(ValueError):
+        ShellEvent.from_dict(data)
+
+
+def test_known_event_with_unexpected_payload_shape_does_fall_back():
+    """The fallback that does exist: a known type whose payload doesn't match."""
+    data = {
+        "id": "evt-abc123def456",
+        "type": "message_chunk",
+        "harness_id": "h",
+        "conversation_id": "c",
+        "timestamp": 1,
+        "seq": 1,
+        "payload": {"unexpected_field": "value"},
+    }
+    event = ShellEvent.from_dict(data)
+    assert event.payload == {"unexpected_field": "value"}

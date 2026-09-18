@@ -3,10 +3,8 @@
 import asyncio
 
 import pytest
-
-from cep.adapter import HarnessConfig
+from cep.adapter import ConfigurationError, HarnessConfig
 from cep.adapters.hermes import HermesAdapter, _parse_sse_chunk
-from cep.adapter import ConfigurationError
 from cep.types import CancelPayload, EventType, ShellEvent, UserMessagePayload
 
 
@@ -81,15 +79,13 @@ def test_parse_sse_tool_call_buffers_args():
     assert _parse_sse_chunk(name_chunk, "hermes", "c1", buffers) == []
     assert _parse_sse_chunk(args_chunk, "hermes", "c1", buffers) == []
 
-    # Flush emits TOOL_CALL_START (with populated args) then TOOL_CALL_END.
+    # Flush emits TOOL_CALL_START only. Hermes executes tools server-side and
+    # returns no result, so no TOOL_CALL_END is invented for an unknown outcome.
     events = _parse_sse_chunk(flush_chunk, "hermes", "c1", buffers)
-    assert [e.type for e in events] == [
-        EventType.TOOL_CALL_START,
-        EventType.TOOL_CALL_END,
-    ]
+    assert [e.type for e in events] == [EventType.TOOL_CALL_START]
     assert events[0].payload.tool_name == "web_search"
     assert events[0].payload.args == {"query": "test"}
-    assert events[1].payload.tool_name == "web_search"
+    assert EventType.TOOL_CALL_END not in [e.type for e in events]
 
 
 def test_parse_sse_risky_tool_yields_approval_request():
@@ -290,7 +286,7 @@ async def test_cancel_without_active_stream_reports_nothing_cancelled():
 
 @pytest.mark.asyncio
 async def test_connect_refused_without_risky_tool_optin():
-    """Connecting must be refused unless risky tools are explicitly allowed (H4)."""
+    """Connecting must be refused unless risky tools are explicitly allowed."""
     adapter = HermesAdapter()
     config = HarnessConfig(harness_id="hermes", name="Hermes Agent", port=8642)
 
@@ -347,3 +343,61 @@ async def test_cancel_targets_only_its_conversation():
     await adapter.send(_cancel("conv-2"))
     await task2
     assert resp2.closed is True
+
+
+# --- Regression tests for defects found in pre-publication review ---------
+
+
+def test_split_multibyte_character_across_chunks_does_not_crash():
+    """A UTF-8 character straddling two network chunks must decode cleanly.
+
+    Decoding each chunk independently raised UnicodeDecodeError and killed the
+    turn; the stream now uses an incremental decoder.
+    """
+    import codecs
+
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    encoded = "café".encode()
+    first, second = encoded[:4], encoded[4:]
+    assert decoder.decode(first) + decoder.decode(second) == "café"
+
+
+def test_error_envelope_is_reported_not_ignored():
+    """An SSE {"error": ...} object must surface instead of being skipped."""
+    adapter = HermesAdapter()
+    line = adapter._dispatch_sse_line(
+        'data: {"error": {"message": "context length exceeded"}}', "c1", {}
+    )
+    assert line["error"] == "context length exceeded"
+    assert line["terminal"] is False
+
+
+def test_finish_reason_marks_stream_terminal():
+    """A finish_reason line marks the stream terminal so completion is real."""
+    adapter = HermesAdapter()
+    line = adapter._dispatch_sse_line(
+        'data: {"choices": [{"delta": {}, "finish_reason": "stop"}]}', "c1", {}
+    )
+    assert line["terminal"] is True
+    assert line["error"] is None
+
+
+def test_done_sentinel_marks_stream_terminal():
+    """The [DONE] sentinel also counts as a terminal marker."""
+    adapter = HermesAdapter()
+    assert adapter._dispatch_sse_line("data: [DONE]", "c1", {})["terminal"] is True
+
+
+@pytest.mark.parametrize("value", ["false", "true", 1, 0, "yes", None])
+def test_risky_tools_gate_requires_the_boolean_true(value):
+    """Only the boolean True opens the gate.
+
+    A truthy string such as "false" previously satisfied the check and let a
+    connection through with risky tools enabled.
+    """
+    adapter = HermesAdapter()
+    config = HarnessConfig(
+        harness_id="hermes", name="Hermes", port=8642, extra={"allow_risky_tools": value}
+    )
+    with pytest.raises(ConfigurationError):
+        asyncio.run(adapter.connect(config))

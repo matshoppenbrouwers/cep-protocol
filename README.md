@@ -1,7 +1,7 @@
 # CEP — Common Event Protocol
 
 A 14-event protocol for the traffic between a **shell** (the UI a person types into) and a
-**harness** (the agent runtime that answers), plus an adapter contract of six methods that
+**harness** (the agent runtime that answers), plus an adapter contract of seven abstract members that
 translates a harness's native transport — WebSocket, SSE, in-process calls — into those events.
 
 Extracted from a discontinued desktop application in 2026 and frozen. The Python core
@@ -23,9 +23,12 @@ implementation, an ACP Registry, and a native agent pane in Microsoft's Intellig
 you are wiring an agent runtime to a client today, use ACP. This repository is not competing with
 it and is not asking anyone to adopt anything.
 
-What makes CEP worth reading is that it arrived at a near-identical shape roughly twelve months
-earlier, independently, from a different starting problem. That is convergent evolution, not a
-moat: two designs pushed into the same form by the same constraints — streaming text, tool calls
+What makes CEP worth reading is that it converged on a near-identical shape independently, from a
+different starting problem. The chronology is the other way round from what convergence might
+suggest: Zed announced ACP on 27 August 2025, and CEP's protocol core was first committed on
+5 April 2026, about seven months later, without reference to it. So this is convergent evolution
+and not precedence, and certainly not a moat: two designs pushed into the same form by the same
+constraints — streaming text, tool calls
 that must be shown before they finish, an out-of-band permission ask, and a turn boundary the UI
 can trust. The two protocols disagree mostly about transport and framing, not about what the
 events are.
@@ -99,16 +102,19 @@ run — `seq` resets when the process does.
 | `cancel` | — | Stop the running turn |
 
 Payloads are frozen, slotted dataclasses. `ShellEvent.to_dict()` / `from_dict()` round-trip
-through plain JSON and rebuild the typed payload on the way back, falling back to a raw dict for
-unknown event types so an older shell survives a newer harness.
+through plain JSON and rebuild the typed payload on the way back, falling back to a raw dict when
+a *known* event's payload shape does not match its dataclass. Unknown event **types** are not
+tolerated: `from_dict()` raises `ValueError`, so a shell has to be upgraded before it can read an
+event type a newer harness introduces. CEP has no forward-compatibility story, which is one of
+the places ACP is simply better designed.
 
 ---
 
 ## Adapter contract
 
 A harness integration is one class extending `HarnessAdapter` (`cep/adapter.py`). The entire
-required surface is six abstract operations — connect, disconnect, send, receive, health-check,
-and identify:
+required surface is seven abstract members, grouped as six operations — connect, disconnect,
+send, receive, health-check, and identify (the `id` / `name` property pair):
 
 | Member | Signature | Responsibility |
 |---|---|---|
@@ -120,8 +126,8 @@ and identify:
 | `on_event` | `(handler: EventHandler) -> None` | Register the callback for harness→shell events |
 | `health_check` | `async () -> HealthStatus` | Non-blocking connectivity probe |
 
-Python-wise that is seven `@abstractmethod` declarations, because "identify" is the `id` / `name`
-property pair.
+Concretely that is five abstract methods plus two abstract properties: seven
+`@abstractmethod` declarations in `cep/adapter.py`.
 
 The base class supplies the rest: `_emit_status`, `_emit_error`, `_emit_turn_start` and
 `_emit_turn_end` build correctly-shaped envelopes so adapters never construct turn bookkeeping by
@@ -147,6 +153,7 @@ pip install -e ".[hermes]"
 
 ```python
 import asyncio
+import os
 
 from cep import EventType, HarnessConfig, ProtocolRuntime, ShellEvent
 from cep.adapters import HermesAdapter
@@ -155,7 +162,7 @@ from cep.types import UserMessagePayload
 runtime = ProtocolRuntime()
 runtime.subscribe(
     lambda event: print(event.payload.text, end="", flush=True),
-    event_types={EventType.MESSAGE_CHUNK},
+    event_types={EventType.MESSAGE_CHUNK, EventType.ERROR},
 )
 
 adapter = HermesAdapter()
@@ -168,6 +175,7 @@ async def main() -> None:
             harness_id="hermes",
             name="Hermes Agent",
             port=8642,
+            auth_token=os.environ["HERMES_API_KEY"],
             extra={"allow_risky_tools": True},
         )
     )

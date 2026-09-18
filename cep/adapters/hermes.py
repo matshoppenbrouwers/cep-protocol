@@ -10,21 +10,27 @@ file_operation, etc.).
 
 from __future__ import annotations
 
+import asyncio
+import codecs
 import json
 import logging
 import time
 import uuid
 from typing import Any
 
-from cep.adapter import EventHandler, HarnessAdapter, HarnessConfig, HealthStatus
-from cep.adapter import ConfigurationError
+from cep.adapter import (
+    ConfigurationError,
+    EventHandler,
+    HarnessAdapter,
+    HarnessConfig,
+    HealthStatus,
+)
 from cep.types import (
     ApprovalRequestPayload,
     EventType,
     MessageChunkPayload,
     MessageCompletePayload,
     ShellEvent,
-    ToolCallEndPayload,
     ToolCallStartPayload,
 )
 
@@ -35,7 +41,7 @@ class RiskyToolsGateError(ConfigurationError):
     """Hermes was asked to connect without the risky-tools opt-in.
 
     A distinct type so the one-click connect flow can surface a deliberate
-    consent step (H4) instead of treating it as a generic connection failure.
+    consent step instead of treating it as a generic connection failure.
     """
 
 
@@ -58,8 +64,10 @@ def _flush_tool_buffers(
 ) -> list[ShellEvent]:
     """Emit events for fully-buffered tool calls.
 
-    Risky tools (``_RISKY_TOOLS``) emit an APPROVAL_REQUEST and gate execution.
-    Non-risky tools emit a TOOL_CALL_START (with parsed args) plus TOOL_CALL_END.
+    Risky tools (``_RISKY_TOOLS``) emit an advisory APPROVAL_REQUEST; it does not
+    hold execution. Non-risky tools emit a TOOL_CALL_START with parsed args.
+    Neither emits TOOL_CALL_END: Hermes returns no execution result, so the
+    outcome is unknown and is not asserted.
     """
     events: list[ShellEvent] = []
     for buf in tool_buffers.values():
@@ -99,14 +107,10 @@ def _flush_tool_buffers(
                 payload=ToolCallStartPayload(tool_name=name, args=args),
             )
         )
-        events.append(
-            ShellEvent(
-                type=EventType.TOOL_CALL_END,
-                harness_id=harness_id,
-                conversation_id=conversation_id,
-                payload=ToolCallEndPayload(tool_name=name),
-            )
-        )
+        # No TOOL_CALL_END here. Reaching this point only means Hermes finished
+        # streaming the call's *arguments*; it executes tools server-side and
+        # sends back no execution result, so emitting an end event would assert
+        # success="True", result="" for an outcome this adapter never observed.
     return events
 
 
@@ -183,7 +187,7 @@ class HermesAdapter(HarnessAdapter):
     Health: GET /health.
     Sessions: X-Hermes-Session-Id header for persistent conversations.
 
-    Agent-profile mapping (Phase 5): the profile's ``model`` becomes the
+    Agent-profile mapping: the profile's ``model`` becomes the
     per-request model and its ``system_prompt`` is prepended as a system
     message; the session header is scoped to the profile so switching agents
     starts a fresh session. Hermes' API server has no per-request working dir
@@ -216,16 +220,17 @@ class HermesAdapter(HarnessAdapter):
 
         Hermes executes its own tools server-side, so this adapter can only
         observe risky tool calls after the fact — its ``APPROVAL_REQUEST`` is
-        advisory and does NOT hold execution (unlike OpenClaw's round-trip).
+        advisory and does NOT gate or hold execution (unlike OpenClaw's round-trip).
         Connecting therefore requires an explicit ``allow_risky_tools`` opt-in
         so risky tools are effectively disabled through Hermes unless an operator
-        knowingly accepts that they run without a real pre-execution gate (H4).
+        knowingly accepts that they run without a real pre-execution gate.
         """
-        if not config.extra.get("allow_risky_tools"):
+        if config.extra.get("allow_risky_tools") is not True:
             raise RiskyToolsGateError(
                 "Hermes executes tools server-side and cannot gate risky tools "
                 f"({', '.join(sorted(_RISKY_TOOLS))}) before they run; its approval "
-                "signal is advisory only. Set extra['allow_risky_tools']=True to "
+                "signal is advisory only. Set extra['allow_risky_tools']=True (the boolean, "
+                "not a string) to "
                 "connect anyway and accept that risk."
             )
 
@@ -251,24 +256,52 @@ class HermesAdapter(HarnessAdapter):
         self._connected = False
         self._emit_status("disconnected")
 
+    def _cancel_turn(self, conversation_id: str) -> None:
+        """Mark a running turn cancelled and abort its in-flight response."""
+        turn = self._turns.get(conversation_id)
+        if turn is None:
+            self.last_cancel_result = {"cancelled": False, "mode": "local"}
+            return
+        turn["cancelled"] = True
+        resp = turn["response"]
+        if resp is not None:
+            # Abort the in-flight SSE response so the read loop terminates
+            # now instead of at the next chunk boundary.
+            resp.close()
+            self.last_cancel_result = {"cancelled": True, "mode": "propagated"}
+        else:
+            # Initial POST still in flight; the stream loop stops at its
+            # first chunk.
+            self.last_cancel_result = {"cancelled": True, "mode": "local"}
+
+    async def _stream_turn(
+        self, event: ShellEvent, body: dict[str, Any], active_turn: dict[str, Any]
+    ) -> str:
+        """POST the turn and consume its stream; returns the turn_end reason."""
+        assert self._session is not None
+        async with self._session.post(
+            "/v1/chat/completions",
+            json=body,
+            headers={"X-Hermes-Session-Id": self._session_id(event.conversation_id)},
+        ) as resp:
+            if resp.status != 200:
+                self._emit_error(
+                    f"Hermes returned {resp.status}",
+                    conversation_id=event.conversation_id,
+                    fatal=True,
+                )
+                return "error"
+            active_turn["response"] = resp
+            try:
+                stream = await self._consume_sse_stream(resp, event.conversation_id, active_turn)
+            finally:
+                active_turn["response"] = None
+            return self._turn_reason_for(stream, event.conversation_id)
+
     async def send(self, event: ShellEvent) -> None:
         """Send user message to Hermes via /v1/chat/completions."""
         if event.type == EventType.CANCEL:
-            turn = self._turns.get(event.conversation_id)
-            if turn is None:
-                self.last_cancel_result = {"cancelled": False, "mode": "local"}
-                return
-            turn["cancelled"] = True
-            resp = turn["response"]
-            if resp is not None:
-                # Abort the in-flight SSE response so the read loop terminates
-                # now instead of at the next chunk boundary.
-                resp.close()
-                self.last_cancel_result = {"cancelled": True, "mode": "propagated"}
-            else:
-                # Initial POST still in flight; the stream loop stops at its
-                # first chunk.
-                self.last_cancel_result = {"cancelled": True, "mode": "local"}
+            self._cancel_turn(event.conversation_id)
             return
         if event.type != EventType.USER_MESSAGE:
             return
@@ -282,34 +315,25 @@ class HermesAdapter(HarnessAdapter):
 
         body = self._build_body(text)
 
+        if event.conversation_id in self._turns:
+            self._emit_error(
+                f"A turn is already running for conversation {event.conversation_id}; "
+                "cancel it before sending another.",
+                conversation_id=event.conversation_id,
+            )
+            return
         active_turn: dict[str, Any] = {"cancelled": False, "response": None}
         self._turns[event.conversation_id] = active_turn
         turn_reason = "complete"
         self._emit_turn_start(event.conversation_id)
         try:
-            async with self._session.post(
-                "/v1/chat/completions",
-                json=body,
-                headers={"X-Hermes-Session-Id": self._session_id(event.conversation_id)},
-            ) as resp:
-                if resp.status != 200:
-                    self._emit_error(
-                        f"Hermes returned {resp.status}",
-                        conversation_id=event.conversation_id,
-                        fatal=True,
-                    )
-                    turn_reason = "error"
-                else:
-                    active_turn["response"] = resp
-                    try:
-                        cancelled = await self._consume_sse_stream(
-                            resp, event.conversation_id, active_turn
-                        )
-                    finally:
-                        active_turn["response"] = None
-                    if cancelled:
-                        turn_reason = "cancelled"
-
+            turn_reason = await self._stream_turn(event, body, active_turn)
+        except asyncio.CancelledError:
+            # Cancelling the task must still close the turn for subscribers,
+            # then propagate so the caller's cancellation semantics hold.
+            self._turns.pop(event.conversation_id, None)
+            self._emit_turn_end(event.conversation_id, reason="cancelled")
+            raise
         except Exception as exc:
             if active_turn["cancelled"]:
                 # A cancel can abort the request mid-flight; that's the intended
@@ -323,29 +347,69 @@ class HermesAdapter(HarnessAdapter):
                 )
                 turn_reason = "error"
         finally:
-            self._turns.pop(event.conversation_id, None)
+            if self._turns.get(event.conversation_id) is active_turn:
+                self._turns.pop(event.conversation_id, None)
         self._emit_turn_end(event.conversation_id, reason=turn_reason)
+
+    def _turn_reason_for(self, stream: dict[str, Any], conversation_id: str) -> str:
+        """Map a finished stream onto a turn_end reason, emitting any error.
+
+        A cancel is an intended stop, not a failure. An error envelope and a
+        stream that stopped without a terminal marker are both failures, and
+        the second one is reported rather than passed off as a complete reply.
+        """
+        if stream["cancelled"]:
+            return "cancelled"
+        if stream["error"]:
+            self._emit_error(
+                f"Hermes stream error: {stream['error']}",
+                conversation_id=conversation_id,
+            )
+            return "error"
+        if not stream["terminal"]:
+            self._emit_error(
+                "Hermes stream ended without a terminal marker; the reply is incomplete.",
+                conversation_id=conversation_id,
+            )
+            return "error"
+        return "complete"
 
     async def _consume_sse_stream(
         self, resp: Any, conversation_id: str, turn: dict[str, Any]
-    ) -> bool:
+    ) -> dict[str, Any]:
         """Read SSE lines from response and dispatch ShellEvents.
 
-        Returns True when the stream was stopped by a cancel request.
+        Returns ``cancelled`` (stopped by a cancel request), ``terminal`` (the
+        server sent a finish marker) and ``error`` (an error envelope arrived).
+        A stream that ends without a terminal marker is reported as such rather
+        than promoted to a completed message.
         """
         full_text = ""
         buffer = ""
         tool_buffers: dict[int, dict[str, str]] = {}
         cancelled = False
+        terminal = False
+        stream_error: str | None = None
+        # A multi-byte character can straddle two network chunks, so decode
+        # incrementally rather than per-chunk.
+        decoder = codecs.getincrementaldecoder("utf-8")()
         try:
             async for raw_bytes in resp.content.iter_any():
                 if turn["cancelled"]:
                     cancelled = True
                     break
-                buffer += raw_bytes.decode("utf-8")
+                buffer += decoder.decode(raw_bytes)
                 while "\n" in buffer:
                     line_str, buffer = buffer.split("\n", 1)
-                    full_text += self._dispatch_sse_line(line_str, conversation_id, tool_buffers)
+                    line = self._dispatch_sse_line(line_str, conversation_id, tool_buffers)
+                    full_text += line["text"]
+                    if line["terminal"]:
+                        terminal = True
+                    if line["error"]:
+                        stream_error = line["error"]
+                        break
+                if stream_error:
+                    break
         except Exception:
             # A cancel closes the response mid-read; that abort is the intended
             # outcome, not an error. Anything else propagates.
@@ -353,7 +417,10 @@ class HermesAdapter(HarnessAdapter):
                 raise
             cancelled = True
 
-        if self._handler and full_text:
+        # Only a stream the server actually finished yields MESSAGE_COMPLETE.
+        # Promoting a truncated or failed stream would report partial text as
+        # the final answer.
+        if self._handler and full_text and terminal and not stream_error and not cancelled:
             self._handler(
                 ShellEvent(
                     type=EventType.MESSAGE_COMPLETE,
@@ -362,33 +429,46 @@ class HermesAdapter(HarnessAdapter):
                     payload=MessageCompletePayload(text=full_text),
                 )
             )
-        return cancelled
+        return {"cancelled": cancelled, "terminal": terminal, "error": stream_error}
 
     def _dispatch_sse_line(
         self,
         line_str: str,
         conversation_id: str,
         tool_buffers: dict[int, dict[str, str]],
-    ) -> str:
-        """Handle one SSE line; returns the text delta it contributed."""
+    ) -> dict[str, Any]:
+        """Handle one SSE line.
+
+        Returns the text delta it contributed, whether the line was a terminal
+        marker, and any error envelope the server sent in place of a chunk.
+        """
+        result: dict[str, Any] = {"text": "", "terminal": False, "error": None}
         line_str = line_str.strip()
         # SSE spec allows the field value with or without a leading space
         # ("data:{...}" or "data: {...}"); OpenAI-compatible servers emit the
         # spaced form, but tolerate both so a strict server doesn't drop tokens.
         if not line_str.startswith("data:"):
-            return ""
+            return result
         data_str = line_str[5:].lstrip()
         if data_str == "[DONE]":
-            return ""
+            result["terminal"] = True
+            return result
 
-        text = ""
         chunk = json.loads(data_str)
+        # An OpenAI-compatible server can send {"error": ...} instead of a chunk.
+        # Ignoring it would let a failed stream finish as a clean turn.
+        if isinstance(chunk, dict) and chunk.get("error"):
+            err = chunk["error"]
+            result["error"] = err.get("message") if isinstance(err, dict) else str(err)
+            return result
+        if any(c.get("finish_reason") for c in chunk.get("choices", [])):
+            result["terminal"] = True
         for shell_event in _parse_sse_chunk(chunk, self.id, conversation_id, tool_buffers):
             if self._handler:
                 self._handler(shell_event)
             if isinstance(shell_event.payload, MessageChunkPayload):
-                text += shell_event.payload.text
-        return text
+                result["text"] += shell_event.payload.text
+        return result
 
     def on_event(self, handler: EventHandler) -> None:
         self._handler = handler

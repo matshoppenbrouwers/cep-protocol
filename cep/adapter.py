@@ -94,7 +94,6 @@ class AgentProfile:
         return cls(**known)
 
 
-
 @dataclass(slots=True)
 class HarnessConfig:
     """Connection configuration for a harness."""

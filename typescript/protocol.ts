@@ -86,13 +86,17 @@ export type CancelPayload = Record<string, never>;
 
 export interface UserMessagePayload {
   text: string;
-  attachments?: Array<{ type: string; data: string }>;
+  // Python side is list[dict[str, Any]], so attachment entries are not
+  // structurally constrained by the protocol.
+  attachments?: Array<Record<string, unknown>>;
 }
 
 export interface ContextUpdatePayload {
   app: string;
   window: string;
-  project?: string;
+  // Serialized as null (not omitted) when unset, because the Python payload
+  // defaults it to None and to_dict() emits every field.
+  project?: string | null;
 }
 
 export interface ShellEventBase {

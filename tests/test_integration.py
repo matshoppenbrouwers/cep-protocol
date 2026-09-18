@@ -1,7 +1,6 @@
 """Integration test: events flow adapter -> runtime -> subscriber."""
 
 import pytest
-
 from cep.adapter import HarnessAdapter, HarnessConfig, HealthStatus
 from cep.registry import AdapterRegistry
 from cep.runtime import ProtocolRuntime

@@ -246,8 +246,11 @@ class ShellEvent:
 
         Reconstructs the typed payload dataclass for known event types so
         attribute access (e.g. ``event.payload.text``) survives a round-trip.
-        Falls back to the raw dict for unknown event types or payload shapes
-        that don't match the dataclass fields.
+        Falls back to the raw dict when a *known* event's payload shape does
+        not match the dataclass fields.
+
+        An unrecognised ``type`` raises ``ValueError``: CEP has no forward
+        compatibility, so a shell cannot read event types added after it.
         """
         event_type = EventType(data["type"])
         raw_payload = data.get("payload", {})

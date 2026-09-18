@@ -1,7 +1,6 @@
 """Tests for protocol runtime event dispatcher."""
 
 import pytest
-
 from cep.runtime import ProtocolRuntime
 from cep.types import (
     EventType,

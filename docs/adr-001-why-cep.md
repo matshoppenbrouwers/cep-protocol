@@ -137,8 +137,9 @@ consequences above.
 
 ## In hindsight
 
-Zed's Agent Client Protocol (ACP) reached this layer and won it. CEP arrived at a
-near-identical shape roughly twelve months earlier and went nowhere, because a protocol
-is adopted for its ecosystem rather than its design. Anyone looking for a live standard
+Zed's Agent Client Protocol (ACP) reached this layer and won it. ACP was announced on
+27 August 2025; CEP's protocol core was first committed on 5 April 2026 and was designed
+without reference to it, so the two converged independently rather than CEP arriving first.
+CEP then went nowhere, because a protocol is adopted for its ecosystem rather than its design. Anyone looking for a live standard
 at this layer should be looking at ACP. What is worth reading here is the shape two
 independent attempts converged on, and the list of things this one got wrong.

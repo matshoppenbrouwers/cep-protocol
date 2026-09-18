@@ -1,7 +1,6 @@
 """Tests for harness adapter base class."""
 
 import pytest
-
 from cep.adapter import HarnessAdapter, HarnessConfig, HealthStatus
 
 

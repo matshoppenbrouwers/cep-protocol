@@ -1,7 +1,6 @@
 """Tests for adapter registry and switcher."""
 
 import pytest
-
 from cep.adapter import HarnessAdapter, HarnessConfig, HealthStatus
 from cep.registry import AdapterRegistry
 from cep.types import ShellEvent
