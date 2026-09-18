@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cep"
+version = "0.1.0"
+description = "Common Event Protocol — a 14-event shell-to-harness event schema with an adapter contract"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = ["protocol", "agent", "harness", "adapter", "events"]
+authors = [{ name = "Mats Hoppenbrouwers" }]
+classifiers = [
+    "Development Status :: 7 - Inactive",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/matshoppenbrouwers/cep-protocol"
+
+[project.optional-dependencies]
+hermes = ["aiohttp>=3.9"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["cep"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+asyncio_mode = "auto"
