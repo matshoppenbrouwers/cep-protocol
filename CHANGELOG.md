@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 — 2026-09-18
+## v0.1.0 - 2026-09-18
 
 The archival release of the Common Event Protocol, extracted from CommandLane, a
 discontinued desktop agent shell. This is the only release planned; see the
@@ -17,7 +17,7 @@ no-maintenance notice in the README.
 - The TypeScript type slice mirroring the protocol
 - Ported tests, the protocol reference and the originating ADR
 
-Three adapters existed historically — CommandLane in-process, Hermes and OpenClaw.
+Three adapters existed historically: CommandLane in-process, Hermes and OpenClaw.
 Only Hermes is published here.
 
 ### Corrected before release

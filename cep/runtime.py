@@ -1,4 +1,4 @@
-"""Protocol runtime — event dispatcher with pub/sub.
+"""Protocol runtime: event dispatcher with pub/sub.
 
 The runtime sits between adapters and the shell. Adapters emit events
 into the runtime; shell components subscribe to events they care about.

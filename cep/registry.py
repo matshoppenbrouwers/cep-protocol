@@ -1,4 +1,4 @@
-"""Adapter registry — manages installed adapters and active selection.
+"""Adapter registry: manages installed adapters and active selection.
 
 The registry is the single point of contact for the sidecar/shell to
 discover, switch, and communicate with harness adapters.

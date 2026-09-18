@@ -1,7 +1,7 @@
 """Common Event Protocol type definitions.
 
 This module defines the shared contract between the shell and harness adapters.
-Neither shell nor agent owns these types — they are the common language.
+Neither shell nor agent owns these types; they are the common language.
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ def _now_ms() -> int:
 
 # Process-wide monotonic sequence so events created in the same millisecond
 # still have a deterministic order. It resets each process, so shadow history
-# replays sort by (timestamp, seq) — seq only tie-breaks within a millisecond.
+# replays sort by (timestamp, seq); seq only tie-breaks within a millisecond.
 _seq_counter = itertools.count(1)
 
 

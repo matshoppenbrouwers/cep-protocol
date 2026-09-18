@@ -13,10 +13,10 @@ in-process ReAct agent over a direct WebSocket path. The direction it moved in w
 become a universal desktop shell for *any* agent harness, which meant separating three
 layers:
 
-- **Model** — the LLM provider
-- **Harness** — the agent orchestrator, whether in-process or an external one such as
+- **Model**: the LLM provider
+- **Harness**: the agent orchestrator, whether in-process or an external one such as
   Hermes or OpenClaw
-- **Shell** — the desktop application: native UI, conversation history, context
+- **Shell**: the desktop application: native UI, conversation history, context
   awareness, harness switching, approval UX
 
 Each harness speaks a different transport and a different event shape: in-process
@@ -42,9 +42,9 @@ Introduce a **Common Event Protocol (CEP)** and an **adapter layer**.
    `TURN_START`, `TURN_END` and `CANCEL` were added once it became clear the shell
    needed to know when a harness was busy and needed a way to interrupt it.
 
-2. **Adapter registry.** Every harness implements the `HarnessAdapter` ABC — a
-   six-method contract — and registers with `AdapterRegistry`. Exactly one adapter is
-   active at a time, switched from the UI.
+2. **Adapter registry.** Every harness implements the `HarnessAdapter` ABC, a
+   contract of seven abstract members, and registers with `AdapterRegistry`. At most one
+   adapter is active at a time, switched from the UI.
 
 3. **Shadow history.** Every protocol event was persisted to SQLite regardless of which
    harness produced it, giving cross-harness conversation memory and search. That
@@ -75,7 +75,7 @@ Introduce a **Common Event Protocol (CEP)** and an **adapter layer**.
 
 ### Negative
 
-- **Two chat-history stores during the transition** — one for legacy slash and
+- **Two chat-history stores during the transition**: one for legacy slash and
   `@mention` turns, one for protocol turns. This is a source-of-truth split, it was
   tracked as a known risk, and convergence was never delivered.
 - **Two live code paths**, protocol and legacy gateway, for as long as the gateway
@@ -89,7 +89,7 @@ Introduce a **Common Event Protocol (CEP)** and an **adapter layer**.
 ### Neutral
 
 - The external adapters were implemented but not registered by default in the shipping
-  build — they were dormant behind a setting. A harness that executes tools server-side
+  build; they were dormant behind a setting. A harness that executes tools server-side
   can only report approvals after the fact, so its approvals are advisory and its
   adapter refuses risky tools unless explicitly opted in, pending a pre-execution
   permission round-trip that was never built.
@@ -119,8 +119,8 @@ shell's internal event model.
 
 **Pros**: reuses a known schema, and some harnesses already emit it.
 
-**Cons**: vendor formats do not model desktop concerns — approval round-trips, desktop
-context updates, harness identity — cleanly, so they would have to be extended anyway.
+**Cons**: vendor formats do not model desktop concerns (approval round-trips, desktop
+context updates, harness identity) cleanly, so they would have to be extended anyway.
 
 **Why not chosen**: a small purpose-built contract fits the shell's needs with less
 impedance, and adapters translate vendor formats into it. The Hermes adapter does

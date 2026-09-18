@@ -1,4 +1,4 @@
-"""Hermes adapter — SSE/HTTP integration via OpenAI-compatible API.
+"""Hermes adapter: SSE/HTTP integration via OpenAI-compatible API.
 
 Connects to Hermes at http://localhost:8642. Uses /v1/chat/completions
 with stream=true for real-time token streaming via Server-Sent Events.
@@ -79,7 +79,7 @@ def _flush_tool_buffers(
             args = {}
 
         if name in _RISKY_TOOLS:
-            # Hermes runs tools server-side, so this approval is advisory —
+            # Hermes runs tools server-side, so this approval is advisory;
             # the tool already executed. "advisory" tells the UI to render a
             # warning, not a blocking gate.
             request_id = f"evt-{uuid.uuid4().hex[:12]}"
@@ -154,7 +154,7 @@ def _parse_sse_chunk(
             )
         )
 
-    # Tool calls — accumulate name and streamed arguments, emit nothing yet.
+    # Tool calls: accumulate name and streamed arguments, emit nothing yet.
     for tc in delta.get("tool_calls", []):
         index = tc.get("index", 0)
         func = tc.get("function", {})
@@ -163,7 +163,7 @@ def _parse_sse_chunk(
             buf["name"] = func["name"]
         buf["args"] += func.get("arguments") or ""
 
-    # Stream / tool-call end — flush buffered tool calls, then signal done.
+    # Stream / tool-call end: flush buffered tool calls, then signal done.
     if finish_reason:
         events.extend(_flush_tool_buffers(tool_buffers, harness_id, conversation_id))
         tool_buffers.clear()
@@ -219,7 +219,7 @@ class HermesAdapter(HarnessAdapter):
         """Open an aiohttp session to Hermes.
 
         Hermes executes its own tools server-side, so this adapter can only
-        observe risky tool calls after the fact — its ``APPROVAL_REQUEST`` is
+        observe risky tool calls after the fact; its ``APPROVAL_REQUEST`` is
         advisory and does NOT gate or hold execution (unlike OpenClaw's round-trip).
         Connecting therefore requires an explicit ``allow_risky_tools`` opt-in
         so risky tools are effectively disabled through Hermes unless an operator

@@ -1,4 +1,4 @@
-# Common Event Protocol — reference
+# Common Event Protocol: reference
 
 > **Disclaimer:** any harness named here (Hermes, OpenClaw) is unaffiliated third-party interop. This project is not associated with, endorsed by, or supported by their authors; it simply speaks their public APIs.
 
@@ -17,7 +17,7 @@ not a specification under active development. See
 
 ## Protocol layer
 
-### `cep/types.py` — event type system
+### `cep/types.py`: event type system
 
 **EventType** enum (14 event types):
 
@@ -40,13 +40,13 @@ not a specification under active development. See
 
 **ShellEvent** dataclass:
 
-- `type: EventType` — event kind
-- `harness_id: str` — which adapter produced this event
-- `conversation_id: str` — session/conversation scope
-- `payload: Payload` — type-specific payload (union of 14 frozen dataclasses)
-- `id: str` — `evt-` followed by 12 hex characters of a UUID4, auto-generated
-- `timestamp: int` — Unix epoch milliseconds, auto-generated
-- `seq: int` — process-wide monotonic sequence. Millisecond timestamps collide under
+- `type: EventType`: event kind
+- `harness_id: str`: which adapter produced this event
+- `conversation_id: str`: session/conversation scope
+- `payload: Payload`: type-specific payload (union of 14 frozen dataclasses)
+- `id: str`: `evt-` followed by 12 hex characters of a UUID4, auto-generated
+- `timestamp: int`: Unix epoch milliseconds, auto-generated
+- `seq: int`: process-wide monotonic sequence. Millisecond timestamps collide under
   streaming, so ordered replay sorts by `(timestamp, seq)`; `seq` is the tie-breaker
   that keeps same-millisecond chunks in emission order, and it resets each process.
 
@@ -64,32 +64,32 @@ than failing silently.
 correlation key. Adapters populate it and mirror it onto `ShellEvent.id`; the
 `APPROVAL_RESPONSE` echoes it in `ApprovalResponsePayload.request_id`. Where a harness
 runs tools itself and can only report an approval after the fact, it sets
-`risk="advisory"` — informational, not a gate.
+`risk="advisory"`: informational, not a gate.
 
-### `cep/runtime.py` — event dispatcher
+### `cep/runtime.py`: event dispatcher
 
 `ProtocolRuntime` is a pub/sub event bus:
 
-- `subscribe(handler, event_types)` — register a handler with an optional type filter;
+- `subscribe(handler, event_types)`: register a handler with an optional type filter;
   returns a subscription id
-- `unsubscribe(sub_id)` — remove a subscription
-- `dispatch(event)` — fan out to all matching subscribers
+- `unsubscribe(sub_id)`: remove a subscription
+- `dispatch(event)`: fan out to all matching subscribers
 
 ---
 
 ## Adapter layer
 
-### `cep/adapter.py` — the contract
+### `cep/adapter.py`: the contract
 
 **HarnessAdapter** ABC, a 6-method integration surface:
 
-- `id: str` (property) — unique adapter identifier
-- `name: str` (property) — human-readable display name
-- `connect(config)` — establish a connection
-- `disconnect()` — close it
-- `send(event)` — send a `ShellEvent` to the harness
-- `on_event(handler)` — register a callback for incoming events
-- `health_check()` — non-blocking connectivity check
+- `id: str` (property): unique adapter identifier
+- `name: str` (property): human-readable display name
+- `connect(config)`: establish a connection
+- `disconnect()`: close it
+- `send(event)`: send a `ShellEvent` to the harness
+- `on_event(handler)`: register a callback for incoming events
+- `health_check()`: non-blocking connectivity check
 
 Helper methods for subclasses: `_emit_status(state, conversation_id)`,
 `_emit_error(message, code, conversation_id, fatal)`,
@@ -105,18 +105,18 @@ optional active `AgentProfile`.
 `system_prompt`, `permissions`, `created_at`). A profile is one named agent layered on
 one installed runtime; several profiles can target the same runtime. The adapter
 applies the active profile at connect/send time according to what the harness can
-actually honour — a field the harness cannot apply is reported as unsupported rather
+actually honour; a field the harness cannot apply is reported as unsupported rather
 than silently dropped.
 
-### `cep/registry.py` — adapter management
+### `cep/registry.py`: adapter management
 
 `AdapterRegistry`:
 
-- `register(adapter)` / `unregister(adapter_id)` — add or remove adapters
-- `set_active(adapter_id)` — switch the active harness
-- `active` / `active_id` — the current active adapter
-- `list_adapters()` — `dict` of id → name
-- `get(adapter_id)` — retrieve a specific adapter
+- `register(adapter)` / `unregister(adapter_id)`: add or remove adapters
+- `set_active(adapter_id)`: switch the active harness
+- `active` / `active_id`: the current active adapter
+- `list_adapters()`: `dict` of id → name
+- `get(adapter_id)`: retrieve a specific adapter
 
 At most one adapter is active at a time. The registry starts with none active, and
 unregistering the active adapter clears the selection.
@@ -128,10 +128,10 @@ unregistering the active adapter clears the selection.
 Three adapters were ever written against this contract: an in-process adapter inside
 the desktop shell itself, the Hermes adapter (shipped here), and an OpenClaw adapter.
 There was never a Claude Code or a Codex adapter. Only the Hermes adapter is published
-in this repository — it is the legible reference implementation, and shipping one
+in this repository; it is the legible reference implementation, and shipping one
 avoids the question of which adapter is canonical.
 
-### `cep/adapters/hermes.py` — SSE/HTTP
+### `cep/adapters/hermes.py`: SSE/HTTP
 
 Connects to Hermes Agent's OpenAI-compatible API server (default port 8642):
 
@@ -143,8 +143,8 @@ Connects to Hermes Agent's OpenAI-compatible API server (default port 8642):
 
 **Verified against a live harness, 2026-07-17.** The API server is **off by default**.
 It is hosted by the `hermes gateway` process and needs `API_SERVER_ENABLED=true` plus a
-generated `API_SERVER_KEY` in the harness `.env` — `~/.hermes/.env` on POSIX, while
-Windows reads its config from `%LOCALAPPDATA%\hermes` under `HERMES_HOME`. Installing
+generated `API_SERVER_KEY` in the harness `.env` (`~/.hermes/.env` on POSIX, while
+Windows reads its config from `%LOCALAPPDATA%\hermes` under `HERMES_HOME`). Installing
 Hermes is not enough; the config step has to run before first launch. The port is set
 by `API_SERVER_PORT` in that same `.env`.
 
@@ -163,8 +163,8 @@ treat this as a record of one tested revision rather than a live compatibility c
 
 Recorded for completeness. This section describes **what the CEP adapter used**, not the
 full capability surface of OpenClaw Gateway. The adapter spoke only the WebSocket protocol
-at `ws://localhost:18789`. OpenClaw also exposes an HTTP REST API — including `/health`,
-`/healthz` and OpenAI-compatible routes — which the adapter did not use. Everything below
+at `ws://localhost:18789`. OpenClaw also exposes an HTTP REST API, including `/health`,
+`/healthz` and OpenAI-compatible routes, which the adapter did not use. Everything below
 is the WebSocket path as the adapter exercised it against gateway 2026.7.1, and the
 limitations listed are the adapter's, not necessarily the gateway's:
 
@@ -185,7 +185,7 @@ limitations listed are the adapter's, not necessarily the gateway's:
 - profile mapping: through the WebSocket methods the adapter used, it could isolate
   sessions per profile and nothing else, so working directory, model, system prompt and
   permissions were reported unsupported. That was a limit of the adapter's chosen
-  surface — the gateway does support session model overrides by other routes.
+  surface; the gateway does support session model overrides by other routes.
 
 ---
 

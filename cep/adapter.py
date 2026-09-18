@@ -3,7 +3,7 @@
 Each adapter translates between a harness's native protocol
 (WebSocket, SSE, direct calls) and the Common Event Protocol.
 
-Adapters implement 6 methods — the entire integration surface.
+Adapters implement five methods and two properties, the entire integration surface.
 """
 
 from __future__ import annotations
