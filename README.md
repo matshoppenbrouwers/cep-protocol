@@ -126,7 +126,7 @@ CEP events is readable in a single file, `cep/adapters/hermes.py`.
 pip install -e ".[hermes,dev]"
 
 # Or pinned to the archival release:
-pip install "cep[hermes] @ git+https://github.com/matshoppenbrouwers/cep-protocol@v0.1.0"
+pip install "cep[hermes] @ git+https://github.com/matshoppenbrouwers/cep-protocol@v0.1.1"
 ```
 
 ```python
@@ -215,8 +215,9 @@ its own module, stripped internal planning comments, and packaging metadata. The
 green with no dependency on the original codebase.
 
 This repository is not maintained. It is a frozen artifact, published as a reference and a
-record of a design. `v0.1.0` is the archival release of the extracted code; no further releases
-are planned. Issues and pull requests will not be reviewed, and no support is offered. Fork it
+record of a design. `v0.1.1` is the archival release of the extracted code. It corrects the
+documentation of `v0.1.0`, whose quickstart did not run as written; the code in the two tags
+is identical, and no further releases are planned. Issues and pull requests will not be reviewed, and no support is offered. Fork it
 freely; that is what the licence is for.
 
 ---
@@ -237,7 +238,7 @@ and a new harness is one adapter class.
 
 ### Is CEP maintained, and should I adopt it?
 
-No, and no. It is frozen at `v0.1.0` and published as a record. For live work at this layer,
+No, and no. It is frozen at `v0.1.1` and published as a record. For live work at this layer,
 ACP is the standard with an ecosystem behind it. Read CEP for the design and for the failure
 modes documented in the ADR.
 

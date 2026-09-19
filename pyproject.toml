@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cep"
-version = "0.1.0"
+version = "0.1.1"
 description = "Common Event Protocol: a 14-event shell-to-harness event schema with an adapter contract"
 readme = "README.md"
 requires-python = ">=3.10"

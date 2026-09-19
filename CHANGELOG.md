@@ -1,10 +1,29 @@
 # Changelog
 
+## v0.1.1 - 2026-09-19
+
+A documentation release. The code is identical to `v0.1.0`; the quickstart in the README
+did not run as written, and a pinned install deserves a copy that does.
+
+Both defects were found by cloning the published repository and following the quickstart
+verbatim, which is the check that should have run before `v0.1.0`.
+
+### Fixed
+
+- The install line offered for "reading and running the tests" was `.[hermes]`, which
+  carries only `aiohttp`. `pytest` and `pytest-asyncio` are in the `dev` extra, so the
+  suite could not run. It is now `.[hermes,dev]`.
+- The example subscriber read `event.payload.text` for every event it received, including
+  `ERROR`, whose payload carries `code` and `message` and no `text`. The Hermes API server
+  is off by default, so a first run ends in a connection error and the example then raised
+  `AttributeError` inside the handler. `ProtocolRuntime.dispatch` caught and logged it, so
+  the script exited 0 having printed a traceback and no error message. The example now
+  branches on event type.
+
 ## v0.1.0 - 2026-09-18
 
 The archival release of the Common Event Protocol, extracted from CommandLane, a
-discontinued desktop agent shell. This is the only release planned; see the
-no-maintenance notice in the README.
+discontinued desktop agent shell. See the no-maintenance notice in the README.
 
 ### Extracted
 
