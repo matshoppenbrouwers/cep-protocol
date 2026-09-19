@@ -187,6 +187,15 @@ public HTTP API. The same goes for any other harness named in this repository.
 CEP was designed and used in production inside CommandLane, a discontinued desktop agent shell,
 and is extracted here under MIT so the design outlives the application.
 
+The shell itself is a second extraction from the same application, published separately as
+[tauri-python-sidecar](https://github.com/matshoppenbrouwers/tauri-python-sidecar): a Tauri v2
+desktop app that runs Python as a supervised sidecar, with the authenticated local transport,
+cross-process SQLite migrations, crash recovery, Nuitka packaging, code signing and auto-update
+that a shipped Windows build needs. The two repositories do not depend on each other and there is
+no CEP code in the sidecar template, but they are the two halves of the same application: CEP is
+the contract a shell renders against, and the sidecar template is a working shell to render it
+in, on Windows.
+
 Three adapters existed historically: an in-process adapter for the host application's own
 agent, the Hermes adapter over SSE/HTTP, and an OpenClaw adapter over WebSocket with a
 real round-trip approval gate. Only Hermes ships here; the in-process adapter was inseparable
@@ -249,6 +258,16 @@ version boundary, which is recorded as a negative consequence in the ADR.
 
 The model is the LLM provider. The harness is the orchestrator around it: the agent loop, tool
 execution and session state. CEP sits between the shell and the harness and never sees the model.
+
+### How do I build a desktop shell that can speak CEP?
+
+CEP is the protocol layer only; it has no UI and no process model. The application scaffold from
+the same original product is published as
+[tauri-python-sidecar](https://github.com/matshoppenbrouwers/tauri-python-sidecar), a Tauri v2
+plus Python template covering sidecar supervision, an authenticated loopback transport, SQLite
+migrations that survive concurrent starts, Nuitka packaging, signing and auto-update. It was
+built and verified on Windows. Wiring the two together is left as an exercise; nothing in the
+template imports `cep`.
 
 ### Is there a TypeScript implementation?
 
