@@ -123,7 +123,7 @@ CEP events is readable in a single file, `cep/adapters/hermes.py`.
 
 ```bash
 # From a clone, for reading and running the tests:
-pip install -e ".[hermes]"
+pip install -e ".[hermes,dev]"
 
 # Or pinned to the archival release:
 pip install "cep[hermes] @ git+https://github.com/matshoppenbrouwers/cep-protocol@v0.1.0"
@@ -138,10 +138,16 @@ from cep.adapters import HermesAdapter
 from cep.types import UserMessagePayload
 
 runtime = ProtocolRuntime()
-runtime.subscribe(
-    lambda event: print(event.payload.text, end="", flush=True),
-    event_types={EventType.MESSAGE_CHUNK, EventType.ERROR},
-)
+
+
+def render(event: ShellEvent) -> None:
+    if event.type is EventType.ERROR:
+        print(f"\n[{event.payload.code}] {event.payload.message}")
+        return
+    print(event.payload.text, end="", flush=True)
+
+
+runtime.subscribe(render, event_types={EventType.MESSAGE_CHUNK, EventType.ERROR})
 
 adapter = HermesAdapter()
 adapter.on_event(runtime.dispatch)
