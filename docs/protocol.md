@@ -81,7 +81,7 @@ runs tools itself and can only report an approval after the fact, it sets
 
 ### `cep/adapter.py`: the contract
 
-**HarnessAdapter** ABC, a 6-method integration surface:
+**HarnessAdapter** ABC, an integration surface of seven abstract members:
 
 - `id: str` (property): unique adapter identifier
 - `name: str` (property): human-readable display name

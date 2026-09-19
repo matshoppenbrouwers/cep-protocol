@@ -137,9 +137,16 @@ consequences above.
 
 ## In hindsight
 
-Zed's Agent Client Protocol (ACP) reached this layer and won it. ACP was announced on
-27 August 2025; CEP's protocol core was first committed on 5 April 2026 and was designed
-without reference to it, so the two converged independently rather than CEP arriving first.
-CEP then went nowhere, because a protocol is adopted for its ecosystem rather than its design. Anyone looking for a live standard
-at this layer should be looking at ACP. What is worth reading here is the shape two
-independent attempts converged on, and the list of things this one got wrong.
+CEP went nowhere, and the reason is not that the design was wrong. A protocol is adopted for
+its ecosystem, and this one had a single application behind it; the standard that took this
+layer is Zed's Agent Client Protocol, announced on 27 August 2025, while CEP's protocol core was
+first committed on 5 April 2026 and designed without reference to it. Anyone looking for a live
+standard should look there.
+
+What is worth keeping from this record is narrower. Two things are visible in hindsight that were
+not visible while building. The first is that the event set was retrofitted under pressure: turn
+lifecycle and cancellation arrived after real harnesses were connected, in a protocol with no
+version negotiation, which left every consumer pinned to one shape. The second is that the
+approval round-trip was the hardest part and the part most worth designing first; a harness that
+executes tools server-side cannot offer a real gate, and a protocol that pretends otherwise
+teaches a shell to display a permission prompt it cannot honour.
